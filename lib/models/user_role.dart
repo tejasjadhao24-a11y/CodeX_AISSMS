@@ -1,0 +1,1 @@
+enum UserRole { rider, passenger }
