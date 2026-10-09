@@ -1,0 +1,58 @@
+Priority 1 — Broken Core Functionality
+1. Fix Admin Panel Login
+The admin panel login at /admin is failing even with correct credentials. Debug the full request path: 
+frontend admin.html login form -> POST /api/admin/login -> JWT issuance -> localStorage storage -> 
+Authorization header attachment on subsequent requests. Check for: (a) password hash mismatch if the 
+bootstrapped admin account's password was set differently than what's documented, (b) CORS issues 
+blocking the login POST, (c) the JWT verification in before_request() rejecting a validly issued token 
+(e.g. wrong secret key, expired token, wrong claim name). Add a specific, non-generic error message 
+returned to the login form for each failure case (bad credentials vs. rate-limited vs. server error) 
+so this is debuggable next time. Verify by actually logging in through the browser, not just via curl.
+2. Implement or Remove "Active Community Rides"
+The Home screen shows an "Active Community Rides" section that has no backend logic behind it — it 
+always renders empty. Implement it properly: add a backend endpoint that returns rides currently in 
+'requested' or 'in_progress' state that are visible campus-wide (not just the user's own rides), and 
+wire the Home screen to poll or socket-listen for updates. Show requester's first name, pickup/drop 
+area (not exact address, for privacy), and time posted. If a student taps one, route them to the ride 
+request screen pre-filled. Handle the empty state gracefully (already exists) and a fetch-failure state 
+(currently missing — add a retry button instead of a silent blank screen).
+3. Driver-Side Ride History (Real-Time + Downloadable)
+Currently only the passenger role has a working "My Rides" history; the driver/rider role has no 
+equivalent view of completed rides. Add a driver ride history screen that queries completed rides 
+where the current user was the assigned driver, updates in real time (or on pull-to-refresh) as rides 
+complete, and reuses the existing certificate/PDF generation service so drivers can download a ride 
+summary the same way passengers can. Do not duplicate the ride history widget — extract the shared 
+list-rendering logic from the passenger screen into a reusable component parameterized by role.
+4. Fix Campus Shuttle Feature
+The "Campus Shuttle" card under Community currently does nothing when tapped (View Schedule button is 
+dead). Implement a real schedule view: either a static JSON/DB-backed shuttle timetable (routes, stops, 
+frequency) that admin can edit from the admin panel, or — if there's no real data source yet — replace 
+it with a clearly-labeled "Schedule coming soon" state rather than a non-functional button. Confirm 
+with me which of these two you're implementing before writing the UI, based on whether shuttle data 
+exists anywhere in the backend already.
+5. Fix Certificate Download / Share / Preview
+On the Achievements/Certificate screen, the Download PDF, Share, and Preview buttons are not working. 
+Debug each independently: Download (check file write permissions and the `pdf`/`printing` package 
+integration), Share (check that a valid file path is being passed to the share sheet, not a stream or 
+null), Preview (check the preview renderer is receiving the generated PDF bytes, not attempting to 
+render before generation completes). Add loading state on each button while the PDF generates so 
+double-taps don't fire duplicate generation calls, and add a visible error toast if generation fails 
+instead of a silent no-op.
+6. Rewrite Bike Rental Feature
+Rewrite the Bike/Scooter rental feature end to end — it's currently non-functional. Required flow:
+- Post: owner sets hourly rate, pickup spot, vehicle type/specs, and a payment method field with 
+  options "UPI" and "Cash" (this is just a stored preference string for now — do NOT integrate any 
+  real payment API, that's future scope).
+- Browse: renter sees available vehicles with rate/hour, pickup spot, and payment method shown.
+- Request -> Approve -> payment_pending -> payment_done -> active -> completed state machine, matching 
+  what's documented. Make every state transition an explicit backend endpoint with validation (can't 
+  skip states, can't approve your own listing, can't double-book an already-rented vehicle).
+- My Bikes / My Rentals tabs should reflect live state, not just "no bikes/no requests" placeholders.
+Test the full loop yourself: post a bike as user A, request as user B, approve as A, walk through every 
+state to completed, confirm no crash at any transition and that both users see correct state at each step.
+7. Find Ride — Implement Real Matching Logic
+The "Find Ride" quick action currently has no matching logic behind it. Implement: query available/online 
+drivers within a reasonable radius of the passenger's requested pickup point, filter out drivers already 
+on an active ride, sort by proximity (or by AI-match score if that scoring logic already exists elsewhere 
+in the codebase — check before building a second version), and return a ranked list. Handle the zero-results 
+case explicitly (clear "no drivers nearby right now" message, not a blank screen or spinner that never resolves).
